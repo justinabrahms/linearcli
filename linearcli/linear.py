@@ -8,6 +8,40 @@ import os
 import requests
 from requests import api
 
+import argparse
+parser = argparse.ArgumentParser(
+    prog='linear',
+    description='CLI for linear.app',
+)
+
+parser.add_argument('--json', action='store_true', help="Print json output")
+
+subparser = parser.add_subparsers(dest='command')
+
+init_parser = subparser.add_parser('init')
+init_parser.add_argument('apikey')
+
+sync_parser = subparser.add_parser('sync')
+sync_parser.add_argument('what', default='all')
+
+info_parse = subparser.add_parser('info')
+info_parse.add_argument('key')
+
+config_parser = subparser.add_parser('config')
+config_parser.add_argument('key')
+config_parser.add_argument('value')
+
+create_parser = subparser.add_parser('create')
+create_parser.add_argument('--title', '-t')
+create_parser.add_argument('--description', '-d', default="")
+create_parser.add_argument('--project-id', '-p')
+create_parser.add_argument('--team-id')
+create_parser.add_argument('--assignee', '-a')
+create_parser.add_argument('--state', '-s')
+
+search_parser = subparser.add_parser('search')
+search_parser.add_argument('terms')
+
 PRINT_JSON = False
 
 def send_query(apikey, query) -> dict:
@@ -356,134 +390,114 @@ Commands:
 
 
 def main():
-    args = sys.argv
+    args = parser.parse_args(sys.argv[1:])
+    command = args.command
+    if command is None:
+        parser.print_help()
+        return sys.exit(1)
 
-    if len(args) == 1:
-        print(help)
-        return
 
-    args.pop(0)
-    command = args.pop(0)
-
-    if command == 'help':
-        print(help)
-        return
+    # May be an empty object if the config isn't there.
+    config = load_config()
 
     if command == 'init':
-        init(*args)
-        return
-
-    config = load_config()
+        return init(*args)
 
     if config["apikey"] is None:
         print("No apikey found. Please run 'linearcli init [apikey]'")
         return
 
-    if command == 'sync':
-        init(None, *args)
-        return
-
-    if command == 'config':
-        set_config(*args)
-        return
-
     apikey = config['apikey']
-    if command == 'create':
-        print(create_issue(config, *args), end="")
-        return
 
-    if command == "listteams":
-        teams = config["teams"]
-        items = []
-        for team in teams:
-            items.append({
-                "uid": team["id"],
-                "title": team["name"],
-                "arg": team["id"],
-            })
-        print(json.dumps({"items": items}, indent=4))
-        return
+    match command:
+        case 'sync':
+            init(None, *args)
+        case 'config':
+            set_config(*args)
+        case 'create':
+            print(create_issue(config, *args), end="")
 
-    if command == "listprojectsforteam":
-        team_id = args.pop(0)
-        projects = config["teams_to_projects"][team_id]
-        items = []
-        for project_id in projects:
-            project = config["projects_by_id"][project_id]
-            items.append({
-                "uid": project["id"],
-                "title": project["name"],
-                "arg": project["id"],
-            })
-        print(json.dumps({"items": items}, indent=4))
-        return
+        case "listteams":
+            teams = config["teams"]
+            items = []
+            for team in teams:
+                items.append({
+                    "uid": team["id"],
+                    "title": team["name"],
+                    "arg": team["id"],
+                })
+            print(json.dumps({"items": items}, indent=4))
 
-    if command == "listprojectslugs":
-        items = []
-        for project in config["projects"]:
-            items.append({
-                "uid": project["id"],
-                "title": project["name"],
-                "arg": project["slugId"],
-            })
-        print(json.dumps({"items": items}, indent=4))
-        return
+        case "listprojectsforteam":
+            team_id = args.pop(0)
+            projects = config["teams_to_projects"][team_id]
+            items = []
+            for project_id in projects:
+                project = config["projects_by_id"][project_id]
+                items.append({
+                    "uid": project["id"],
+                    "title": project["name"],
+                    "arg": project["id"],
+                })
+            print(json.dumps({"items": items}, indent=4))
 
-    if command == "listusers":
-        users = config["users"]
-        items = []
-        for user in users:
-            items.append({
-                "uid": user["id"],
-                "title": user["name"],
-                "arg": user["id"],
-                "icon": {
-                    "path": get_icon_path(user["id"]),
-                }
-            })
-        print(json.dumps({"items": items}, indent=4))
-        return
+        case "listprojectslugs":
+            items = []
+            for project in config["projects"]:
+                items.append({
+                    "uid": project["id"],
+                    "title": project["name"],
+                    "arg": project["slugId"],
+                })
+            print(json.dumps({"items": items}, indent=4))
 
-    if command == "search":
-        query = args.pop(0)
+        case "listusers":
+            users = config["users"]
+            items = []
+            for user in users:
+                items.append({
+                    "uid": user["id"],
+                    "title": user["name"],
+                    "arg": user["id"],
+                    "icon": {
+                        "path": get_icon_path(user["id"]),
+                    }
+                })
+            print(json.dumps({"items": items}, indent=4))
 
-        results = send_query(apikey, SEARCH_ISSUES.replace("<query>", query))
-        issues = []
-        for issue in results["data"]["issueSearch"]["nodes"]:
-            project = "No Project"
-            if issue["project"] and issue["project"]["name"]:
-                project = issue["project"]["name"]
-            issues.append({
-                "uid": issue["id"],
-                "title": issue["title"],
-                "subtitle": project + " " + str(issue["description"] if issue["description"] else ""),
-                "arg": issue["identifier"],
-            })
+        case "search":
+            query = args.terms
 
-
-        if PRINT_JSON:
-            print(json.dumps({"items": issues, "query": query}, indent=4))
-        else:
-            for item in issues:
-                print(f"{item['arg']} {item['title']}")
-
-        return
-
-    if command == "info":
-        issue_id = args.pop(0)
-        query = ISSUE_INFO.replace("<query>", issue_id)
-        results = send_query(apikey, query)
-        issue = results['data']['issue']
-        print(f"{issue['identifier']} {issue['title']}")
-        print()
-        print(issue['description'])
-        print()
-        print(issue['url'])
-
-        return
+            results = send_query(apikey, SEARCH_ISSUES.replace("<query>", query))
+            issues = []
+            for issue in results["data"]["issueSearch"]["nodes"]:
+                project = "No Project"
+                if issue["project"] and issue["project"]["name"]:
+                    project = issue["project"]["name"]
+                issues.append({
+                    "uid": issue["id"],
+                    "title": issue["title"],
+                    "subtitle": project + " " + str(issue["description"] if issue["description"] else ""),
+                    "arg": issue["identifier"],
+                })
 
 
-    print("Dont understand: {query}", args )
+            if PRINT_JSON:
+                print(json.dumps({"items": issues, "query": query}, indent=4))
+            else:
+                for item in issues:
+                    print(f"{item['arg']} {item['title']}")
+
+        case "info":
+            issue_id = args.key
+            query = ISSUE_INFO.replace("<query>", issue_id)
+            results = send_query(apikey, query)
+            issue = results['data']['issue']
+            print(f"{issue['identifier']} {issue['title']}")
+            print()
+            print(issue['description'])
+            print()
+            print(issue['url'])
 
 if __name__ == '__main__':
     main()
