@@ -6,15 +6,13 @@ Simple CLI interface for linear task manager (https://linear.app)
 ## Usage
 
 ### Install:
+Frenchie4111 still owns this on the main repo. For now, you can use editable installs.
 
-```
-pip install linearcli
-```
+If you want to hack on it (please do)
 
-or if you want to hack on it (please do)
-
-```
-pip install -e path/to/where/you/checked/out/the/repo
+```sh
+$ git clone https://github.com/justinabrahms/linearcli.git
+$ pip install -e linearcli/
 ```
 
 ### Setup:
