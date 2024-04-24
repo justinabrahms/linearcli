@@ -9,6 +9,7 @@ import requests
 from requests import api
 
 import argparse
+
 parser = argparse.ArgumentParser(
     prog='linear',
     description='CLI for linear.app',
@@ -32,12 +33,13 @@ config_parser.add_argument('key')
 config_parser.add_argument('value')
 
 create_parser = subparser.add_parser('create')
-create_parser.add_argument('--title', '-t')
+create_parser.add_argument('--title', '-t', required=True)
 create_parser.add_argument('--description', '-d', default="")
 create_parser.add_argument('--project-id', '-p')
 create_parser.add_argument('--team-id')
 create_parser.add_argument('--assignee', '-a')
 create_parser.add_argument('--state', '-s')
+create_parser.add_argument('--labels', '-l')
 
 search_parser = subparser.add_parser('search')
 search_parser.add_argument('terms')
@@ -205,7 +207,6 @@ class Config(TypedDict):
     projects_by_id: Dict[str, Project]
     states_by_team: Dict[str, Dict[str, str]]
     me: str
-
     default_team: Optional[str]
 
 def get_config_path():
@@ -319,7 +320,7 @@ def set_config(key: str, value: str):
     config[key] = value
     save_config(config)
 
-def create_issue(config, title, project_id=None, team_id=None, assignee_id=None, state_id=None, description="Created by miscript", ):
+def create_issue(config, title, project_id=None, team_id=None, assignee_id=None, state_id=None, description="Created by miscript", labels=None):
     if team_id is None:
         team_id = config["default_team"]
 
@@ -348,45 +349,31 @@ def create_issue(config, title, project_id=None, team_id=None, assignee_id=None,
                 id
                 title
                 identifier
+                url
             }}
         }}
     }}
     """
     res = send_query(config['apikey'], query)
-    return res["data"]["issueCreate"]["issue"]["identifier"]
+    issue = res["data"]["issueCreate"]["issue"]
+    issue_id = issue['id']
+    url = issue["url"]
 
-help = """Linear CLI
+    if labels is not None and len(labels) > 0:
+        import pdb; pdb.set_trace()
 
-Format:
-    linearcli [command] [command args]
+        quoted = ['"%s"' % x for x in labels.split(',')]
+        joined = ','.join(quoted)
+        label_query = """query Query {issueLabels(filter: { name: { in: [<>] } }) {nodes {id name}}}""".replace("<>", joined)
+        label_resp = send_query(config['apikey'], label_query)
+        ids = [x['id'] for x in label_resp['data']['issueLabels']['nodes']]
 
-Commands:
-    help
-        Prints this help message
+        add_query = 'mutation IssueAddLabel { %s }' % (
+            '\n'.join(["""label%d: issueAddLabel(labelId: "%s", id: "%s") { success }""" % (i, label_id, issue_id) for (i, label_id) in enumerate(ids)])
+        )
+        send_query(config['apikey'], add_query)
 
-    init [apikey]
-        Initializes the CLI.
-        If apikey is not specified, it will be read from the config file.
-
-    sync [me|teams|states|users|avatars|projects]
-        Syncs the local data with linear. Allows for rapid lookup of teams,
-            states, users, projects, and avatars.
-
-    config [key] [value]
-        Sets a config value.
-        Possible keys:
-            default_team: The id of the default team to use when creating issues.
-
-    create [*title] [project_id] [team_id] [assignee_id] [state_id] [description]
-        Creates an issue on the specified team.
-        Only title is required, project_id and team_id defaults can be configured
-
-    search [query]
-        Searches for issues in linear, will search all issues you have access to
-
-    listteams
-        Lists all synced teams
-"""
+    return url
 
 
 def main():
@@ -415,7 +402,17 @@ def main():
         case 'config':
             set_config(*args)
         case 'create':
-            print(create_issue(config, *args), end="")
+            url = create_issue(
+                config,
+                args.title,
+                project_id=args.project_id,
+                team_id=args.team_id,
+                assignee_id=args.assignee,
+                state_id=args.state,
+                description=args.description,
+                labels=args.labels
+            )
+            print(url)
 
         case "listteams":
             teams = config["teams"]
