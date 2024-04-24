@@ -19,14 +19,14 @@ pip install -e path/to/where/you/checked/out/the/repo
 
 ### Setup:
 
-Generate a personal API key in the linear app, and run `linearcli init <apikey>`
+Generate a personal API key in the linear app, and run `linear init <apikey>`
 
 This will create `~/.linear/data.json
 
 ### Sync:
 
 The CLI tool creates a local cache of slowly changing data (teams, users,
-task states, avatars), you can update the cache by doing `linearcli sync`
+task states, avatars), you can update the cache by doing `linear sync`
 
 ### Help:
 
