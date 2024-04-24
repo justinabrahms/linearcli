@@ -8,6 +8,8 @@ import os
 import requests
 from requests import api
 
+PRINT_JSON = False
+
 def send_query(apikey, query) -> dict:
     res = requests.post(
         'https://api.linear.app/graphql',
@@ -125,6 +127,17 @@ query Issues {
             }
         }
     }
+}
+"""
+
+ISSUE_INFO = """
+query IssueQuery {
+  issue(id: "<query>") {
+    identifier
+    title
+    description
+    url
+  }
 }
 """
 
@@ -447,9 +460,28 @@ def main():
                 "arg": issue["identifier"],
             })
 
-        print(json.dumps({"items": issues, "query": query}, indent=4))
+
+        if PRINT_JSON:
+            print(json.dumps({"items": issues, "query": query}, indent=4))
+        else:
+            for item in issues:
+                print(f"{item['arg']} {item['title']}")
 
         return
+
+    if command == "info":
+        issue_id = args.pop(0)
+        query = ISSUE_INFO.replace("<query>", issue_id)
+        results = send_query(apikey, query)
+        issue = results['data']['issue']
+        print(f"{issue['identifier']} {issue['title']}")
+        print()
+        print(issue['description'])
+        print()
+        print(issue['url'])
+
+        return
+
 
     print("Dont understand: {query}", args )
 
