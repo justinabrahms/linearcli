@@ -8,6 +8,8 @@ import os
 import requests
 from requests import api
 
+from .timing import timing
+
 import argparse
 
 parser = argparse.ArgumentParser(
@@ -16,6 +18,7 @@ parser = argparse.ArgumentParser(
 )
 
 parser.add_argument('--json', action='store_true', help="Print json output")
+parser.add_argument('--debug', action='store_true', help="debug mode (for hacking on the thing)")
 
 subparser = parser.add_subparsers(dest='command')
 
@@ -320,7 +323,7 @@ def set_config(key: str, value: str):
     config[key] = value
     save_config(config)
 
-def create_issue(config, title, project_id=None, team_id=None, assignee_id=None, state_id=None, description="Created by miscript", labels=None):
+def create_issue(config, title, project_id=None, team_id=None, assignee_id=None, state_id=None, description="Created by miscript", labels=None, debug=False):
     if team_id is None:
         team_id = config["default_team"]
 
@@ -354,24 +357,25 @@ def create_issue(config, title, project_id=None, team_id=None, assignee_id=None,
         }}
     }}
     """
-    res = send_query(config['apikey'], query)
+    with timing("create issue", debug=debug):
+        res = send_query(config['apikey'], query)
     issue = res["data"]["issueCreate"]["issue"]
     issue_id = issue['id']
     url = issue["url"]
 
     if labels is not None and len(labels) > 0:
-        import pdb; pdb.set_trace()
-
         quoted = ['"%s"' % x for x in labels.split(',')]
         joined = ','.join(quoted)
         label_query = """query Query {issueLabels(filter: { name: { in: [<>] } }) {nodes {id name}}}""".replace("<>", joined)
-        label_resp = send_query(config['apikey'], label_query)
+        with timing("label query", debug=debug):
+            label_resp = send_query(config['apikey'], label_query)
         ids = [x['id'] for x in label_resp['data']['issueLabels']['nodes']]
 
         add_query = 'mutation IssueAddLabel { %s }' % (
             '\n'.join(["""label%d: issueAddLabel(labelId: "%s", id: "%s") { success }""" % (i, label_id, issue_id) for (i, label_id) in enumerate(ids)])
         )
-        send_query(config['apikey'], add_query)
+        with timing("label addition", debug=debug):
+            send_query(config['apikey'], add_query)
 
     return url
 
@@ -410,7 +414,8 @@ def main():
                 assignee_id=args.assignee,
                 state_id=args.state,
                 description=args.description,
-                labels=args.labels
+                labels=args.labels,
+                debug=args.debug,
             )
             print(url)
 
