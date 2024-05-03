@@ -376,7 +376,10 @@ def create_issue(config, title, project_id=None, team_id=None, assignee_id=None,
             '\n'.join(["""label%d: issueAddLabel(labelId: "%s", id: "%s") { success }""" % (i, label_id, issue_id) for (i, label_id) in enumerate(ids)])
         )
         with timing("label addition", debug=debug):
-            send_query(config['apikey'], add_query)
+            try:
+                send_query(config['apikey'], add_query)
+            except Exception as e:
+                print("Couldn't add label: ", e)
 
     return url
 
