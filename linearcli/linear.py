@@ -331,9 +331,10 @@ def create_issue(config, title, project_id=None, team_id=None, assignee_id=None,
         state_id = config["states_by_team"][team_id]["Todo"]
 
     project_part = f"projectId: \"{project_id}\"" if project_id else ""
+    assignee_part = ""
 
-    if assignee_id is None:
-        assignee_id = config["me"]
+    if assignee_id == 'me':
+        assignee_part = f'assigneeId: "{config["me"]}"'
 
     query = f"""
     mutation IssueCreate {{
@@ -343,7 +344,7 @@ def create_issue(config, title, project_id=None, team_id=None, assignee_id=None,
                 description: "{description}"
                 teamId: "{team_id}"
                 stateId: "{state_id}"
-                assigneeId: "{assignee_id}"
+                {assignee_part}
                 {project_part}
             }}
         ) {{
